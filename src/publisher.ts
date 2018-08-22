@@ -6,18 +6,31 @@ import { IQueueNameConfig, asPubSubQueueNameConfig } from "./common";
 import { createChildLogger } from "./childLogger";
 
 export class RabbitMqPublisher {
+    channelMap = {};
+
     constructor(private logger: Logger, private connectionFactory: IRabbitMqConnectionFactory) {
         this.logger = createChildLogger(logger, "RabbitMqPublisher");
-
     }
 
     publish<T>(queue: string | IQueueNameConfig, message: T): Promise<void> {
         const queueConfig = asPubSubQueueNameConfig(queue);
         const settings = this.getSettings();
+        this.logger.debug(queueConfig.name);        
+        if(this.channelMap[queueConfig.name]){
+            this.logger.debug('reuse channel for '+queueConfig.name);
+            const channel = this.channelMap[queueConfig.name];
+            return Promise.resolve(channel.publish(queueConfig.dlx, '', this.getMessageBuffer(message))).then(() => {
+                this.logger.trace("message sent to exchange '%s' (%j)", queueConfig.dlx, message)
+            }).catch(() => {
+                this.logger.error("unable to send message to exchange '%j' {%j}", queueConfig.dlx, message)
+                return Promise.reject(new Error("Unable to send message"))
+            });
+        }
         return this.connectionFactory.create()
             .then(connection => connection.createChannel())
             .then(channel => {
                 this.logger.trace("got channel for exchange '%s'", queueConfig.dlx);
+                this.channelMap[queueConfig.name] = channel;
                 return this.setupChannel<T>(channel, queueConfig)
                     .then(() => {
                         return Promise.resolve(channel.publish(queueConfig.dlx, '', this.getMessageBuffer(message))).then(() => {
