@@ -505,8 +505,7 @@ var RabbitMqSubscriber = /** @class */ (function () {
     };
     RabbitMqSubscriber.prototype.getQueueSettings = function (deadletterExchangeName) {
         return {
-            exclusive: true,
-            expires: 10000,
+            exclusive: true
         };
     };
     RabbitMqSubscriber.prototype.getDLSettings = function () {

@@ -71,8 +71,7 @@ export class RabbitMqSubscriber {
 
     protected getQueueSettings(deadletterExchangeName: string): amqp.Options.AssertQueue {
         return {
-            exclusive: true,
-            expires: 10000,
+            exclusive: true
         }
     }
 
