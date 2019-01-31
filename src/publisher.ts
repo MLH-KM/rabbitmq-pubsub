@@ -16,31 +16,22 @@ export class RabbitMqPublisher {
         const queueConfig = asPubSubQueueNameConfig(queue);
         const settings = this.getSettings();
         this.logger.debug(queueConfig.name);        
-        if(this.channelMap[queueConfig.name]){
-            this.logger.debug('reuse channel for '+queueConfig.name);
-            const channel = this.channelMap[queueConfig.name];
+        if (!this.channelMap[queueConfig.name]) {
+            this.channelMap[queueConfig.name] =
+                this.connectionFactory.create().then(connection => {
+                    return connection.createChannel().then(channel => {
+                        return this.setupChannel<T>(channel, queueConfig).then(() => channel)
+                    });
+                })
+        }
+        return this.channelMap[queueConfig.name].then((channel) => {
             return Promise.resolve(channel.publish(queueConfig.dlx, '', this.getMessageBuffer(message))).then(() => {
                 this.logger.trace("message sent to exchange '%s' (%j)", queueConfig.dlx, message)
-            }).catch(() => {
+            });
+        }).catch(() => {
                 this.logger.error("unable to send message to exchange '%j' {%j}", queueConfig.dlx, message)
-                return Promise.reject(new Error("Unable to send message"))
-            });
-        }
-        return this.connectionFactory.create()
-            .then(connection => connection.createChannel())
-            .then(channel => {
-                this.logger.trace("got channel for exchange '%s'", queueConfig.dlx);
-                this.channelMap[queueConfig.name] = channel;
-                return this.setupChannel<T>(channel, queueConfig)
-                    .then(() => {
-                        return Promise.resolve(channel.publish(queueConfig.dlx, '', this.getMessageBuffer(message))).then(() => {
-                            this.logger.trace("message sent to exchange '%s' (%j)", queueConfig.dlx, message)
-                        });
-                    }).catch(() => {
-                         this.logger.error("unable to send message to exchange '%j' {%j}", queueConfig.dlx, message)
-                        return Promise.reject(new Error("Unable to send message"))
-                    })
-            });
+            return Promise.reject(new Error("Unable to send message"))
+        })
     }
 
     private setupChannel<T>(channel: amqp.Channel, queueConfig: IQueueNameConfig) {

@@ -331,30 +331,21 @@ var RabbitMqPublisher = /** @class */ (function () {
         var queueConfig = common_1.asPubSubQueueNameConfig(queue);
         var settings = this.getSettings();
         this.logger.debug(queueConfig.name);
-        if (this.channelMap[queueConfig.name]) {
-            this.logger.debug('reuse channel for ' + queueConfig.name);
-            var channel = this.channelMap[queueConfig.name];
-            return Promise.resolve(channel.publish(queueConfig.dlx, '', this.getMessageBuffer(message))).then(function () {
-                _this.logger.trace("message sent to exchange '%s' (%j)", queueConfig.dlx, message);
-            }).catch(function () {
-                _this.logger.error("unable to send message to exchange '%j' {%j}", queueConfig.dlx, message);
-                return Promise.reject(new Error("Unable to send message"));
-            });
-        }
-        return this.connectionFactory.create()
-            .then(function (connection) { return connection.createChannel(); })
-            .then(function (channel) {
-            _this.logger.trace("got channel for exchange '%s'", queueConfig.dlx);
-            _this.channelMap[queueConfig.name] = channel;
-            return _this.setupChannel(channel, queueConfig)
-                .then(function () {
-                return Promise.resolve(channel.publish(queueConfig.dlx, '', _this.getMessageBuffer(message))).then(function () {
-                    _this.logger.trace("message sent to exchange '%s' (%j)", queueConfig.dlx, message);
+        if (!this.channelMap[queueConfig.name]) {
+            this.channelMap[queueConfig.name] =
+                this.connectionFactory.create().then(function (connection) {
+                    return connection.createChannel().then(function (channel) {
+                        return _this.setupChannel(channel, queueConfig).then(function () { return channel; });
+                    });
                 });
-            }).catch(function () {
-                _this.logger.error("unable to send message to exchange '%j' {%j}", queueConfig.dlx, message);
-                return Promise.reject(new Error("Unable to send message"));
+        }
+        return this.channelMap[queueConfig.name].then(function (channel) {
+            return Promise.resolve(channel.publish(queueConfig.dlx, '', _this.getMessageBuffer(message))).then(function () {
+                _this.logger.trace("message sent to exchange '%s' (%j)", queueConfig.dlx, message);
             });
+        }).catch(function () {
+            _this.logger.error("unable to send message to exchange '%j' {%j}", queueConfig.dlx, message);
+            return Promise.reject(new Error("Unable to send message"));
         });
     };
     RabbitMqPublisher.prototype.setupChannel = function (channel, queueConfig) {
